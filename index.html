@@ -121,6 +121,7 @@
     <div id="form-container">
         <button id="copy-link" onclick="copyLink()">Copy Link</button>
         <input id="ytInput" type="text" placeholder="Paste your YouTube link here..." />
+        <button onclick="pasteLink()">Paste Link</button>
         <button onclick="updateStream()">Load Stream</button>
     </div>
 
@@ -183,6 +184,15 @@
                     button.style.backgroundColor = "var(--neon-blue)";
                     button.textContent = "Copy Link";
                 }, 5000);
+            }
+        }
+
+        async function pasteLink() {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById("ytInput").value = text;
+            } catch (e) {
+                alert("❌ Failed to paste. Please paste manually (Ctrl+V)");
             }
         }
 
