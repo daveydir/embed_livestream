@@ -12,6 +12,7 @@
             --neon-blue: #00ddeb;
             --neon-blue-dark: #00a3ad;
             --shadow: 0 0 10px rgba(0, 221, 235, 0.5);
+            --neon-glow: 0 0 20px rgba(0, 221, 235, 0.6);
         }
 
         * {
@@ -38,6 +39,7 @@
             max-height: 100vh;
             display: flex;
             justify-content: center;
+            align-items: center;
             position: relative;
         }
 
@@ -51,6 +53,91 @@
             aspect-ratio: 16 / 9;
             background: #000;
             margin: 0 auto;
+        }
+
+        #history-menu {
+            position: absolute;
+            width: 90%;
+            max-width: 600px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid var(--neon-blue);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: var(--neon-glow);
+            display: none;
+        }
+
+        #history-menu.visible {
+            display: block;
+        }
+
+        #history-menu h2 {
+            margin: 0 0 20px 0;
+            text-align: center;
+            color: var(--neon-blue);
+            font-size: 24px;
+            text-shadow: var(--shadow);
+        }
+
+        .history-item {
+            background: #111;
+            border: 1px solid #333;
+            border-left: 3px solid var(--neon-blue);
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .history-item:hover {
+            background: #1a1a1a;
+            border-color: var(--neon-blue);
+            box-shadow: var(--shadow);
+            transform: translateX(5px);
+        }
+
+        .history-item-link {
+            color: var(--neon-blue);
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-item-time {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .no-history {
+            text-align: center;
+            color: #666;
+            padding: 40px 20px;
+            font-style: italic;
+        }
+
+        .clear-history {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .clear-history button {
+            padding: 8px 16px;
+            background: #cc0000;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+
+        .clear-history button:hover {
+            background: #ff0000;
         }
 
         #form-container {
@@ -117,6 +204,14 @@
 <body>
     <div class="iframe-wrapper">
         <iframe id="ytFrame" allow="autoplay; encrypted-media" allowfullscreen src=""></iframe>
+        
+        <div id="history-menu">
+            <h2>Recent Links</h2>
+            <div id="history-list"></div>
+            <div class="clear-history">
+                <button onclick="clearHistory()">Clear History</button>
+            </div>
+        </div>
     </div>
     <div id="form-container">
         <button id="copy-link" onclick="copyLink()">Copy Link</button>
@@ -126,6 +221,86 @@
     </div>
 
     <script>
+        const HISTORY_KEY = 'yt_link_history';
+        const MAX_HISTORY = 10;
+
+        function getHistory() {
+            const history = localStorage.getItem(HISTORY_KEY);
+            return history ? JSON.parse(history) : [];
+        }
+
+        function saveToHistory(link) {
+            let history = getHistory();
+            
+            // Remove if already exists (to avoid duplicates)
+            history = history.filter(item => item.link !== link);
+            
+            // Add to beginning with timestamp
+            history.unshift({
+                link: link,
+                timestamp: Date.now()
+            });
+            
+            // Keep only last 10
+            history = history.slice(0, MAX_HISTORY);
+            
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+            renderHistory();
+        }
+
+        function formatTimestamp(timestamp) {
+            const now = Date.now();
+            const diff = now - timestamp;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes} min ago`;
+            if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+            
+            const date = new Date(timestamp);
+            return date.toLocaleDateString();
+        }
+
+        function renderHistory() {
+            const history = getHistory();
+            const historyList = document.getElementById('history-list');
+            const historyMenu = document.getElementById('history-menu');
+            
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="no-history">No recent links yet. Load a stream to get started!</div>';
+            } else {
+                historyList.innerHTML = history.map(item => `
+                    <div class="history-item" onclick="loadFromHistory('${item.link.replace(/'/g, "\\'")}')">
+                        <div class="history-item-link">${item.link}</div>
+                        <div class="history-item-time">${formatTimestamp(item.timestamp)}</div>
+                    </div>
+                `).join('');
+            }
+            
+            // Show menu only if no video is loaded
+            const iframe = document.getElementById('ytFrame');
+            if (!iframe.src || iframe.src === '' || iframe.src === window.location.href) {
+                historyMenu.classList.add('visible');
+            } else {
+                historyMenu.classList.remove('visible');
+            }
+        }
+
+        function loadFromHistory(link) {
+            document.getElementById('ytInput').value = link;
+            updateStream();
+        }
+
+        function clearHistory() {
+            if (confirm('Clear all history?')) {
+                localStorage.removeItem(HISTORY_KEY);
+                renderHistory();
+            }
+        }
+
         function extractVideoID(url) {
             try {
                 const parsed = new URL(url);
@@ -152,6 +327,12 @@
             if (id) {
                 document.getElementById("ytFrame").src =
                     `https://www.youtube.com/embed/${id}?autoplay=1`;
+                
+                // Save to history
+                saveToHistory(input);
+                
+                // Hide history menu
+                document.getElementById('history-menu').classList.remove('visible');
             } else {
                 alert("❌ Invalid YouTube URL or ID.");
             }
@@ -200,6 +381,9 @@
         document.getElementById('ytInput')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') updateStream();
         });
+
+        // Initial render
+        renderHistory();
     </script>
 </body>
 
